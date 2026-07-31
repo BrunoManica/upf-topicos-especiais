@@ -1,0 +1,32 @@
+theme:
+  name: "material"
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.sections
+    - navigation.tabs
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+site_name: Upf topicos especiasis II - Aulas
+
+nav:
+  - Home: index.md
+  - Aula 1 — Node.js e APIs HTTP: aula1/aula1.md
+  
