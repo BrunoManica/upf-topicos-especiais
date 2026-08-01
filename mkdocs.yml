@@ -24,9 +24,8 @@ theme:
     - navigation.top
     - search.highlight
     - search.share
-site_name: Upf topicos especiasis II - Aulas
+site_name: Upf topicos especiais II - Aulas
 
 nav:
   - Home: index.md
   - Aula 1 — Node.js e APIs HTTP: aula1/aula1.md
-  
