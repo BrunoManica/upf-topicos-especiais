@@ -1,669 +1,480 @@
-# Aula 2 — API de contas a receber, Swagger e Prettier
+# Aula 2 — APIs HTTP, rotas e introdução ao service
 
 ## Objetivo da aula
 
-Evoluir o backend iniciado na Aula 1 para uma API de prestação de contas. A aplicação permitirá cadastrar contas a receber de empresas, informar o valor de cada conta e enviar a imagem da nota fiscal em Base64.
+Evoluir o backend iniciado na Aula 1 para uma API de prestações de contas com operações de cadastro, listagem, consulta, substituição, alteração de status e exclusão.
 
-Ao final, teremos rotas com `GET`, `POST`, `PUT`, `PATCH` e `DELETE`, exemplos de path parameters, query parameters e body, documentação interativa com Swagger e formatação automática com Prettier.
+Durante a construção, vamos usar os métodos HTTP `GET`, `POST`, `PUT`, `PATCH` e `DELETE`, receber dados por path parameter, query parameter e body, aplicar códigos de resposta HTTP e separar as responsabilidades entre routes, controllers e services.
+
+## Resultado final
+
+Ao concluir a aula, o backend terá as seguintes rotas:
+
+| Método | Rota | Operação |
+| --- | --- | --- |
+| `GET` | `/prestacoes-de-contas` | listar as prestações |
+| `GET` | `/prestacoes-de-contas/consulta?termo=...` | demonstrar o recebimento de um query parameter |
+| `GET` | `/prestacoes-de-contas/:id` | buscar uma prestação pelo identificador |
+| `POST` | `/prestacoes-de-contas` | cadastrar uma prestação |
+| `PUT` | `/prestacoes-de-contas/:id` | substituir os dados editáveis |
+| `PATCH` | `/prestacoes-de-contas/:id/status` | alterar somente o status |
+| `DELETE` | `/prestacoes-de-contas/:id` | excluir uma prestação |
+
+Os registros serão mantidos em um array enquanto o servidor estiver em execução. A aplicação ficará organizada neste fluxo:
+
+```text
+requisição HTTP → route → controller → service → array em memória
+```
 
 ## Contexto
 
-Uma empresa pode ter diversos valores a pagar. No sistema de prestação de contas, cada lançamento representa uma conta a receber e contém informações como empresa devedora, descrição, valor, vencimento e nota fiscal.
+Na Aula 1, criamos o servidor Express, registramos rotas e usamos controllers para receber dados. O `POST` mostrava o body no terminal, mas a informação enviada não podia ser consultada, alterada ou excluída.
 
-A nota fiscal será enviada como Base64. Nesse formato, os bytes de uma imagem são representados por texto, permitindo colocar a imagem dentro do mesmo JSON usado para cadastrar a conta.
+Uma API de prestação de contas precisa representar operações completas. Depois de cadastrar uma despesa, o usuário deve conseguir consultar o registro, corrigir seus dados, atualizar seu status e, quando necessário, excluí-lo.
 
-Exemplo resumido:
-
-```json
-{
-  "empresa": "Empresa Exemplo Ltda.",
-  "valor": 1500,
-  "notaFiscalBase64": "data:image/png;base64,iVBORw0KGgo..."
-}
-```
-
-Nesta aula, as contas ficarão na memória enquanto o servidor estiver em execução. Assim, podemos praticar as requisições HTTP e visualizar seus resultados imediatamente.
+Para construir essas operações sem concentrar tudo no controller, vamos introduzir o service. O controller continuará cuidando da comunicação HTTP, enquanto o service manipulará as prestações mantidas em memória.
 
 ## Explicação conceitual
 
+### Recurso, rota e endpoint
+
+O recurso principal desta API é a prestação de contas. Por isso, usamos o substantivo no plural na URL:
+
+```text
+/prestacoes-de-contas
+```
+
+Um endpoint é formado pela combinação de um método HTTP com uma rota. `GET /prestacoes-de-contas` e `POST /prestacoes-de-contas` usam o mesmo caminho, mas representam operações diferentes.
+
 ### Métodos HTTP
 
-| Método | Operação na API |
+| Método | Uso nesta API |
 | --- | --- |
-| `GET` | listar ou consultar uma conta |
-| `POST` | cadastrar uma nova conta |
-| `PUT` | substituir todos os dados editáveis de uma conta |
-| `PATCH` | alterar somente o status da conta |
-| `DELETE` | excluir uma conta |
+| `GET` | consultar dados sem alterá-los |
+| `POST` | criar uma nova prestação |
+| `PUT` | substituir todos os dados editáveis de uma prestação |
+| `PATCH` | alterar somente uma parte do recurso |
+| `DELETE` | excluir uma prestação |
 
-O `PUT` exige todos os campos editáveis. O `PATCH` recebe somente o campo que precisa ser alterado.
+O `PUT` desta aula recebe empresa, descrição, valor e data de vencimento. O `PATCH` recebe apenas o novo status. Essa diferença deixa claro se a requisição representa uma substituição completa ou uma alteração pontual.
 
 ### Path parameter, query parameter e body
 
-Os dados podem chegar em partes diferentes da requisição:
+Os dados de uma requisição podem chegar em locais diferentes:
 
-* **Path parameter:** identifica um recurso. Em `/contas-receber/2`, o `2` está em `requisicao.params.id`.
-* **Query parameter:** aplica um filtro. Em `/contas-receber?empresa=acme`, o valor está em `requisicao.query.empresa`.
-* **Body:** transporta dados em JSON, como empresa, valor e nota fiscal.
+| Local | Exemplo | Leitura no Express |
+| --- | --- | --- |
+| path parameter | `/prestacoes-de-contas/1` | `requisicao.params.id` |
+| query parameter | `/prestacoes-de-contas/consulta?termo=viagem` | `requisicao.query.termo` |
+| body | JSON enviado em um `POST` | `requisicao.body` |
 
-É possível combinar filtros usando `&`:
+O path parameter faz parte do caminho e identifica um recurso específico. O query parameter aparece depois de `?` e acrescenta uma informação à consulta. Nesta aula, a rota de consulta apenas devolverá o termo recebido para tornar visível o funcionamento de `requisicao.query`; ela não filtrará a listagem.
 
-```text
-/contas-receber?empresa=acme&status=PENDENTE
-```
+O body transporta os dados do cadastro ou da atualização. Para que o Express converta o JSON recebido em um objeto, `express.json()` deve ser registrado antes das rotas.
 
-### A imagem em Base64
+### Códigos de resposta HTTP
 
-Uma imagem Base64 costuma ser representada por uma Data URL:
+O status informa o resultado da requisição sem exigir que o cliente interprete uma mensagem textual.
 
-```text
-data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...
-```
+| Status | Significado nesta aula |
+| --- | --- |
+| `200 OK` | consulta ou alteração concluída |
+| `201 Created` | prestação cadastrada |
+| `204 No Content` | prestação excluída, sem body na resposta |
+| `404 Not Found` | identificador não encontrado |
 
-O início informa o tipo do arquivo e a parte depois da vírgula contém os bytes codificados. Base64 aumenta o tamanho do conteúdo em comparação com o arquivo original. Por isso, usaremos uma imagem pequena nos testes.
+### Routes, controllers e services
 
-### Status HTTP
+Cada camada responde a uma pergunta diferente:
 
-* `200`: consulta, alteração ou exclusão realizada;
-* `201`: conta cadastrada;
-* `400`: dados inválidos;
-* `404`: conta não encontrada;
-* `500`: erro inesperado no servidor.
+| Camada | Responsabilidade |
+| --- | --- |
+| route | qual método e caminho acionam a operação? |
+| controller | quais dados chegaram pela requisição e qual resposta HTTP deve sair? |
+| service | como consultar ou modificar as prestações? |
 
-### Swagger e Prettier
+Essa separação evita que detalhes do Express se misturem com a manipulação do array. O service não recebe `Request` nem `Response`; ele trabalha com números, textos e objetos do domínio.
 
-OpenAPI descreve rotas, parâmetros, bodies e respostas. Swagger UI transforma essa descrição em uma página que permite conhecer e testar a API pelo navegador.
+## Preparação
 
-Prettier formata o código automaticamente, mantendo espaçamento, aspas e quebras de linha consistentes.
-
-## Setup inicial
-
-Continue no backend da Aula 1:
+Continue no projeto `backend` criado na Aula 1:
 
 ```bash
 cd /caminho/para/o/projeto/backend
-npm install swagger-ui-express
-npm install -D @types/swagger-ui-express prettier
-npm pkg set scripts.formatar="prettier --write ."
 ```
+
+As dependências necessárias já foram instaladas. Confirme que o projeto compila antes de alterar os arquivos:
+
+```bash
+npm run build
+```
+
+Nesta aula, criaremos as pastas `services` e `tipos`, separaremos a configuração da aplicação em `app.ts` e substituiremos o router geral pelas rotas do recurso de prestações de contas.
 
 ## Passo a passo
 
-### 1. Criar a estrutura de pastas
+### 1. Organizar a estrutura do backend
+
+Ao final da reorganização, os arquivos usados pela aplicação serão:
 
 ```text
 backend/
 ├── src/
-│   ├── configuracoes/
-│   │   └── swagger.ts
 │   ├── controllers/
-│   │   └── contaReceberController.ts
-│   ├── middlewares/
-│   │   └── validarCorpo.ts
+│   │   └── prestacaoContaController.ts
 │   ├── routes/
-│   │   └── contaReceberRotas.ts
+│   │   └── prestacaoContaRotas.ts
 │   ├── services/
-│   │   └── contaReceberService.ts
+│   │   └── prestacaoContaService.ts
 │   ├── tipos/
-│   │   └── contaReceber.ts
+│   │   └── prestacaoConta.ts
 │   ├── app.ts
 │   └── servidor.ts
-├── .prettierignore
-├── .prettierrc.json
 ├── package.json
 └── tsconfig.json
 ```
 
-No Linux ou macOS:
+No Linux ou macOS, crie as novas pastas e os arquivos:
 
 ```bash
-mkdir -p src/configuracoes src/controllers src/middlewares src/routes src/services src/tipos
-touch src/app.ts src/configuracoes/swagger.ts
-touch src/controllers/contaReceberController.ts
-touch src/middlewares/validarCorpo.ts
-touch src/routes/contaReceberRotas.ts src/services/contaReceberService.ts
-touch src/tipos/contaReceber.ts
-touch .prettierrc.json .prettierignore
+mkdir -p src/controllers src/routes src/services src/tipos
+touch src/app.ts
+touch src/controllers/prestacaoContaController.ts
+touch src/routes/prestacaoContaRotas.ts
+touch src/services/prestacaoContaService.ts
+touch src/tipos/prestacaoConta.ts
 ```
 
-No Windows PowerShell:
+No Windows PowerShell, use:
 
 ```powershell
-mkdir src/configuracoes, src/controllers, src/middlewares, src/routes, src/services, src/tipos
-New-Item src/app.ts -ItemType File
-New-Item src/configuracoes/swagger.ts -ItemType File
-New-Item src/controllers/contaReceberController.ts -ItemType File
-New-Item src/middlewares/validarCorpo.ts -ItemType File
-New-Item src/routes/contaReceberRotas.ts -ItemType File
-New-Item src/services/contaReceberService.ts -ItemType File
-New-Item src/tipos/contaReceber.ts -ItemType File
-New-Item .prettierrc.json, .prettierignore -ItemType File
+New-Item src/services, src/tipos -ItemType Directory -Force
+New-Item src/app.ts -ItemType File -Force
+New-Item src/controllers/prestacaoContaController.ts -ItemType File -Force
+New-Item src/routes/prestacaoContaRotas.ts -ItemType File -Force
+New-Item src/services/prestacaoContaService.ts -ItemType File -Force
+New-Item src/tipos/prestacaoConta.ts -ItemType File -Force
 ```
 
-Nesta aula, usaremos somente as pastas necessárias para colocar as rotas em funcionamento. As rotas definem os endpoints, os middlewares tratam tarefas compartilhadas antes dos controllers, os controllers tratam HTTP, o service executa as operações das contas e a pasta `tipos` descreve o formato dos dados.
+Os arquivos `helloController.ts`, `usariosController.ts`, `prestacaoContasController.ts` e `routes/router.ts` foram usados para os primeiros exemplos da Aula 1 e não fazem parte da nova estrutura. Exclua esses quatro arquivos pelo explorador do editor depois de criar os arquivos acima. O novo tipo substitui os campos introdutórios `nomeGasto`, `data` e `arquivo` por `empresa`, `descricao` e `dataVencimento`, que representam o contrato adotado para a prestação de contas. Dessa forma, o projeto fica com uma única API e sem imports ou rotas antigas.
 
-### 2. Configurar o Prettier
+### 2. Definir os tipos da prestação de contas
 
-Crie `.prettierrc.json`:
-
-```json
-{
-  "semi": true,
-  "singleQuote": true,
-  "tabWidth": 2,
-  "trailingComma": "all"
-}
-```
-
-Crie `.prettierignore`:
-
-```text
-node_modules
-dist
-package-lock.json
-```
-
-### 3. Definir os tipos da conta a receber
-
-Crie `src/tipos/contaReceber.ts`:
+Crie `src/tipos/prestacaoConta.ts`:
 
 ```ts
-export type StatusConta = 'PENDENTE' | 'RECEBIDA' | 'CANCELADA';
+export type StatusPrestacao = 'PENDENTE' | 'RECEBIDA' | 'CANCELADA';
 
-export interface DadosContaReceber {
+export interface DadosPrestacaoConta {
   empresa: string;
   descricao: string;
   valor: number;
   dataVencimento: string;
-  notaFiscalBase64: string;
 }
 
-export interface CorpoStatus {
-  status: StatusConta;
-}
-
-export interface ContaReceber {
+export interface PrestacaoConta extends DadosPrestacaoConta {
   id: number;
-  empresa: string;
-  descricao: string;
-  valor: number;
-  dataVencimento: string;
-  notaFiscalBase64: string;
-  status: StatusConta;
+  status: StatusPrestacao;
+}
+
+export interface CorpoStatusPrestacao {
+  status: StatusPrestacao;
 }
 
 export interface ParametrosId {
   id: string;
 }
-
-export interface ConsultaContas {
-  empresa?: string;
-  status?: string;
-}
-
 ```
 
-`ContaReceber` representa uma conta completa, incluindo o `id` e o `status`. `DadosContaReceber` representa somente os campos enviados pelo cliente no cadastro e na atualização.
+`DadosPrestacaoConta` descreve os campos enviados no cadastro e na substituição. `PrestacaoConta` acrescenta `id` e `status`, que são controlados pela aplicação.
 
-Os outros tipos descrevem partes específicas das requisições HTTP: o parâmetro `id`, os filtros da listagem e o body usado para alterar o status.
+O status aceita três valores: `PENDENTE`, `RECEBIDA` ou `CANCELADA`. Uma nova prestação começa como `PENDENTE`.
 
-### 4. Criar o service
+**Checkpoint:** salve o arquivo e execute:
 
-Crie `src/services/contaReceberService.ts`:
+```bash
+npm run build
+```
+
+Como o arquivo ainda não é importado, a compilação apenas confirma que a sintaxe e os tipos estão corretos.
+
+### 3. Criar o service com dados em memória
+
+Crie `src/services/prestacaoContaService.ts`:
 
 ```ts
 import {
-  ContaReceber,
-  DadosContaReceber,
-  StatusConta,
-} from '../tipos/contaReceber';
+  DadosPrestacaoConta,
+  PrestacaoConta,
+  StatusPrestacao,
+} from '../tipos/prestacaoConta';
 
-const contas: ContaReceber[] = [];
+const prestacoes: PrestacaoConta[] = [];
 let proximoId = 1;
 
-export function listarContas(
-  empresa?: string,
-  status?: string,
-): ContaReceber[] {
-  let resultado = contas;
-
-  if (empresa) {
-    resultado = resultado.filter((conta) =>
-      conta.empresa.toLowerCase().includes(empresa.toLowerCase()),
-    );
-  }
-
-  if (status) {
-    resultado = resultado.filter((conta) => conta.status === status);
-  }
-
-  return resultado;
+export function listarPrestacoes(): PrestacaoConta[] {
+  return prestacoes;
 }
 
-export function buscarConta(id: number): ContaReceber | undefined {
-  return contas.find((conta) => conta.id === id);
+export function buscarPrestacaoPorId(id: number): PrestacaoConta | undefined {
+  return prestacoes.find((prestacao) => prestacao.id === id);
 }
 
-export function criarConta(dados: DadosContaReceber): ContaReceber {
-  const novaConta: ContaReceber = {
+export function criarPrestacao(dados: DadosPrestacaoConta): PrestacaoConta {
+  const novaPrestacao: PrestacaoConta = {
     id: proximoId,
     ...dados,
     status: 'PENDENTE',
   };
 
   proximoId += 1;
-  contas.push(novaConta);
-  return novaConta;
+  prestacoes.push(novaPrestacao);
+  return novaPrestacao;
 }
 
-export function atualizarConta(
+export function substituirPrestacao(
   id: number,
-  dados: DadosContaReceber,
-): ContaReceber | undefined {
-  const conta = buscarConta(id);
+  dados: DadosPrestacaoConta,
+): PrestacaoConta | undefined {
+  const prestacao = buscarPrestacaoPorId(id);
 
-  if (!conta) {
+  if (!prestacao) {
     return undefined;
   }
 
-  conta.empresa = dados.empresa;
-  conta.descricao = dados.descricao;
-  conta.valor = dados.valor;
-  conta.dataVencimento = dados.dataVencimento;
-  conta.notaFiscalBase64 = dados.notaFiscalBase64;
-  return conta;
+  prestacao.empresa = dados.empresa;
+  prestacao.descricao = dados.descricao;
+  prestacao.valor = dados.valor;
+  prestacao.dataVencimento = dados.dataVencimento;
+
+  return prestacao;
 }
 
-export function alterarStatusConta(
+export function alterarStatusPrestacao(
   id: number,
-  status: StatusConta,
-): ContaReceber | undefined {
-  const conta = buscarConta(id);
+  status: StatusPrestacao,
+): PrestacaoConta | undefined {
+  const prestacao = buscarPrestacaoPorId(id);
 
-  if (!conta) {
+  if (!prestacao) {
     return undefined;
   }
 
-  conta.status = status;
-  return conta;
+  prestacao.status = status;
+  return prestacao;
 }
 
-export function excluirConta(id: number): boolean {
-  const indice = contas.findIndex((conta) => conta.id === id);
+export function excluirPrestacao(id: number): boolean {
+  const indice = prestacoes.findIndex((prestacao) => prestacao.id === id);
 
   if (indice === -1) {
     return false;
   }
 
-  contas.splice(indice, 1);
+  prestacoes.splice(indice, 1);
   return true;
 }
 ```
 
-O service mantém os dados em memória e executa as operações. A criação define o status inicial como `PENDENTE`.
+O array `prestacoes` representa os dados da aplicação durante a execução. `proximoId` gera identificadores numéricos sem exigir que o cliente envie um `id`.
 
-### 5. Criar o middleware de validação
+As funções de busca, substituição e alteração podem devolver `undefined`. Esse retorno informa ao controller que não existe uma prestação com o identificador recebido. Na exclusão, `true` ou `false` comunica se um item foi removido.
 
-Crie `src/middlewares/validarCorpo.ts`:
+Como o array está na memória do processo Node.js, reiniciar o servidor faz a sequência começar novamente com um array vazio e `proximoId` igual a `1`.
 
-```ts
-import { NextFunction, Request, Response } from 'express';
-import { CorpoStatus, DadosContaReceber } from '../tipos/contaReceber';
+**Checkpoint:** compile novamente:
 
-// Valida os campos usados no cadastro e na atualização de uma conta.
-export function validarDadosConta(
-  // Request recebe, nesta ordem: parâmetros da rota, corpo da resposta e body da requisição.
-  // Os dois object indicam que não precisamos tipar os primeiros itens nesta função.
-  // DadosContaReceber dá autocomplete ao body, mas não valida o JSON durante a execução.
-  requisicao: Request<object, object, DadosContaReceber>,
-  resposta: Response,
-  proximo: NextFunction,
-): void {
-  const dados = requisicao.body;
-
-  if (!dados.empresa) {
-    resposta.status(400).json({ mensagem: 'Informe a empresa' });
-    return;
-  }
-
-  if (!dados.descricao) {
-    resposta.status(400).json({ mensagem: 'Informe a descrição' });
-    return;
-  }
-
-  if (dados.valor <= 0) {
-    resposta.status(400).json({ mensagem: 'O valor deve ser maior que zero' });
-    return;
-  }
-
-  if (!dados.dataVencimento || !dados.notaFiscalBase64) {
-    resposta.status(400).json({ mensagem: 'Preencha todos os campos' });
-    return;
-  }
-
-  // next libera a requisição para o controller quando os dados são válidos.
-  proximo();
-}
-
-// O PATCH aceita somente um dos status definidos pela aplicação.
-export function validarStatus(
-  requisicao: Request<object, object, CorpoStatus>,
-  resposta: Response,
-  proximo: NextFunction,
-): void {
-  const statusPermitidos = ['PENDENTE', 'RECEBIDA', 'CANCELADA'];
-
-  if (!statusPermitidos.includes(requisicao.body.status)) {
-    resposta.status(400).json({ mensagem: 'Status inválido' });
-    return;
-  }
-
-  proximo();
-}
+```bash
+npm run build
 ```
 
-O middleware é uma função executada entre a chegada da requisição e o controller. Se o body for inválido, ele responde com `400` e encerra o fluxo. Se for válido, chama `proximo()` para liberar a execução do controller.
+### 4. Criar os controllers de listagem e consulta
 
-O tipo `Request` do Express permite descrever diferentes partes da requisição usando tipos genéricos. Os quatro tipos principais seguem esta ordem:
-
-```ts
-Request<ParametrosDaRota, CorpoDaResposta, CorpoDaRequisicao, Query>
-```
-
-Por isso, no middleware usamos:
-
-```ts
-Request<object, object, DadosContaReceber>
-```
-
-O primeiro `object` indica que não estamos descrevendo parâmetros da rota. O segundo indica que não precisamos definir um formato específico para o corpo da resposta. `DadosContaReceber`, na terceira posição, informa ao TypeScript o formato esperado em `requisicao.body`.
-
-Com isso, o editor oferece autocomplete para `requisicao.body.empresa` e acusa um erro ao tentar acessar um campo inexistente. Essa tipagem funciona somente durante o desenvolvimento: ela não verifica o JSON enviado pelo cliente. A validação em tempo de execução continua sendo responsabilidade do middleware.
-
-Nesta aula a validação foi escrita com condições simples para manter o foco no fluxo do Express. Bibliotecas de schema e validações mais completas podem ser apresentadas em uma aula posterior.
-
-### 6. Criar o controller
-
-Crie `src/controllers/contaReceberController.ts`:
+Comece `src/controllers/prestacaoContaController.ts` com os imports e as três funções de consulta:
 
 ```ts
 import { Request, Response } from 'express';
 import {
-  alterarStatusConta,
-  atualizarConta,
-  buscarConta,
-  criarConta,
-  excluirConta,
-  listarContas,
-} from '../services/contaReceberService';
+  alterarStatusPrestacao,
+  buscarPrestacaoPorId,
+  criarPrestacao,
+  excluirPrestacao,
+  listarPrestacoes,
+  substituirPrestacao,
+} from '../services/prestacaoContaService';
 import {
-  ConsultaContas,
-  CorpoStatus,
-  DadosContaReceber,
+  CorpoStatusPrestacao,
+  DadosPrestacaoConta,
   ParametrosId,
-} from '../tipos/contaReceber';
+} from '../tipos/prestacaoConta';
 
-export function listar(
-  requisicao: Request<object, object, object, ConsultaContas>,
+export function listar(_requisicao: Request, resposta: Response): void {
+  resposta.status(200).json(listarPrestacoes());
+}
+
+export function demonstrarConsulta(
+  requisicao: Request,
   resposta: Response,
 ): void {
-  const { empresa, status } = requisicao.query;
-  resposta.status(200).json(listarContas(empresa, status));
+  resposta.status(200).json({
+    termoRecebido: requisicao.query.termo ?? null,
+  });
 }
 
 export function buscarPorId(
   requisicao: Request<ParametrosId>,
   resposta: Response,
 ): void {
-  const conta = buscarConta(Number(requisicao.params.id));
+  const id = Number(requisicao.params.id);
+  const prestacao = buscarPrestacaoPorId(id);
 
-  if (!conta) {
-    resposta.status(404).json({ mensagem: 'Conta não encontrada' });
+  if (!prestacao) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
     return;
   }
 
-  resposta.status(200).json(conta);
+  resposta.status(200).json(prestacao);
 }
+```
 
+`listar` recebe a lista do service e a devolve com `200`. O nome `_requisicao` indica que o parâmetro é exigido pelo Express, mas não é usado nessa função.
+
+`demonstrarConsulta` lê `termo` em `requisicao.query` e devolve o mesmo valor. O operador `??` usa `null` quando o parâmetro não foi enviado.
+
+Em `buscarPorId`, todo path parameter chega como texto. `Number()` converte o valor antes de chamar o service, que trabalha com identificadores numéricos.
+
+### 5. Acrescentar os controllers de criação e alteração
+
+No final de `src/controllers/prestacaoContaController.ts`, acrescente:
+
+```ts
 export function criar(
-  // O terceiro tipo de Request descreve o formato esperado em requisicao.body.
-  requisicao: Request<object, object, DadosContaReceber>,
+  requisicao: Request<object, object, DadosPrestacaoConta>,
   resposta: Response,
 ): void {
-  // O middleware já validou o body.
-  resposta.status(201).json(criarConta(requisicao.body));
+  const prestacaoCriada = criarPrestacao(requisicao.body);
+  resposta.status(201).json(prestacaoCriada);
 }
 
-export function atualizar(
-  requisicao: Request<ParametrosId, object, DadosContaReceber>,
+export function substituir(
+  requisicao: Request<ParametrosId, object, DadosPrestacaoConta>,
   resposta: Response,
 ): void {
-  const conta = atualizarConta(Number(requisicao.params.id), requisicao.body);
+  const id = Number(requisicao.params.id);
+  const prestacaoAtualizada = substituirPrestacao(id, requisicao.body);
 
-  if (!conta) {
-    resposta.status(404).json({ mensagem: 'Conta não encontrada' });
+  if (!prestacaoAtualizada) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
     return;
   }
 
-  resposta.status(200).json(conta);
+  resposta.status(200).json(prestacaoAtualizada);
 }
 
 export function alterarStatus(
-  requisicao: Request<ParametrosId, object, CorpoStatus>,
+  requisicao: Request<ParametrosId, object, CorpoStatusPrestacao>,
   resposta: Response,
 ): void {
-  const conta = alterarStatusConta(
-    Number(requisicao.params.id),
+  const id = Number(requisicao.params.id);
+  const prestacaoAtualizada = alterarStatusPrestacao(
+    id,
     requisicao.body.status,
   );
 
-  if (!conta) {
-    resposta.status(404).json({ mensagem: 'Conta não encontrada' });
+  if (!prestacaoAtualizada) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
     return;
   }
 
-  resposta.status(200).json(conta);
+  resposta.status(200).json(prestacaoAtualizada);
 }
+```
 
+No `POST`, o controller lê o body, chama o service e responde com `201`. O objeto criado já contém o `id` e o status inicial.
+
+No `PUT`, todos os campos de `DadosPrestacaoConta` são enviados para substituir os dados editáveis. O identificador e o status permanecem os mesmos.
+
+No `PATCH`, o body contém somente `status`. O service localiza o registro e altera apenas esse campo.
+
+### 6. Acrescentar o controller de exclusão
+
+Complete `src/controllers/prestacaoContaController.ts` com:
+
+```ts
 export function excluir(
   requisicao: Request<ParametrosId>,
   resposta: Response,
 ): void {
-  const contaFoiExcluida = excluirConta(Number(requisicao.params.id));
+  const id = Number(requisicao.params.id);
+  const prestacaoExcluida = excluirPrestacao(id);
 
-  if (!contaFoiExcluida) {
-    resposta.status(404).json({ mensagem: 'Conta não encontrada' });
+  if (!prestacaoExcluida) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
     return;
   }
 
-  resposta.status(200).json({ mensagem: 'Conta excluída com sucesso' });
+  resposta.status(204).send();
 }
 ```
 
-O controller lê `params`, `query` e `body`, chama o service e escolhe o status HTTP da resposta. Ele pode trabalhar com `DadosContaReceber` porque as rotas garantem que o middleware seja executado antes dele.
+Uma exclusão bem-sucedida devolve `204`. Esse status não possui body, por isso usamos `send()` sem conteúdo.
 
-O service também recebe dados já validados e concentra as operações e regras de negócio. Assim, middleware, controller e service possuem responsabilidades diferentes.
+### 7. Associar métodos, caminhos e controllers
 
-### 7. Definir as rotas
-
-Crie `src/routes/contaReceberRotas.ts`:
+Crie `src/routes/prestacaoContaRotas.ts`:
 
 ```ts
 import { Router } from 'express';
 import {
   alterarStatus,
-  atualizar,
   buscarPorId,
   criar,
+  demonstrarConsulta,
   excluir,
   listar,
-} from '../controllers/contaReceberController';
-import { validarDadosConta, validarStatus } from '../middlewares/validarCorpo';
+  substituir,
+} from '../controllers/prestacaoContaController';
 
-export const contaReceberRotas = Router();
+export const prestacaoContaRotas = Router();
 
-contaReceberRotas.get('/', listar);
-contaReceberRotas.get('/:id', buscarPorId);
-// O middleware valida o body antes de entregar a requisição ao controller.
-contaReceberRotas.post('/', validarDadosConta, criar);
-contaReceberRotas.put('/:id', validarDadosConta, atualizar);
-contaReceberRotas.patch('/:id/status', validarStatus, alterarStatus);
-contaReceberRotas.delete('/:id', excluir);
+prestacaoContaRotas.get('/', listar);
+prestacaoContaRotas.get('/consulta', demonstrarConsulta);
+prestacaoContaRotas.get('/:id', buscarPorId);
+prestacaoContaRotas.post('/', criar);
+prestacaoContaRotas.put('/:id', substituir);
+prestacaoContaRotas.patch('/:id/status', alterarStatus);
+prestacaoContaRotas.delete('/:id', excluir);
 ```
 
-As rotas de escrita recebem duas funções. O Express executa primeiro o middleware de validação; o controller só é executado quando o middleware chama `proximo()`.
+A rota `/consulta` aparece antes de `/:id`. O Express verifica as rotas na ordem em que foram registradas. Se `/:id` viesse primeiro, a palavra `consulta` poderia ser interpretada como um identificador.
 
-### 8. Configurar o Swagger
+O arquivo de rotas não manipula o array e não monta respostas. Ele apenas associa cada endpoint ao controller correspondente.
 
-Crie `src/configuracoes/swagger.ts`:
-
-```ts
-const corpoConta = {
-  type: 'object',
-  required: ['empresa', 'descricao', 'valor', 'dataVencimento', 'notaFiscalBase64'],
-  properties: {
-    empresa: { type: 'string', example: 'Empresa Exemplo Ltda.' },
-    descricao: { type: 'string', example: 'Serviço de desenvolvimento' },
-    valor: { type: 'number', example: 1500 },
-    dataVencimento: { type: 'string', format: 'date', example: '2026-08-15' },
-    notaFiscalBase64: {
-      type: 'string',
-      example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
-    },
-  },
-};
-
-const parametroId = {
-  in: 'path',
-  name: 'id',
-  required: true,
-  schema: { type: 'integer' },
-};
-
-export const documentacaoSwagger = {
-  openapi: '3.0.0',
-  info: {
-    title: 'API de Prestação de Contas',
-    version: '1.0.0',
-    description: 'Cadastro e acompanhamento de contas a receber.',
-  },
-  servers: [{ url: 'http://localhost:3000' }],
-  paths: {
-    '/contas-receber': {
-      get: {
-        summary: 'Lista as contas a receber',
-        tags: ['Contas a receber'],
-        parameters: [
-          { in: 'query', name: 'empresa', schema: { type: 'string' } },
-          {
-            in: 'query',
-            name: 'status',
-            schema: { type: 'string', enum: ['PENDENTE', 'RECEBIDA', 'CANCELADA'] },
-          },
-        ],
-        responses: { '200': { description: 'Lista de contas' } },
-      },
-      post: {
-        summary: 'Cadastra uma conta a receber',
-        tags: ['Contas a receber'],
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: corpoConta } },
-        },
-        responses: {
-          '201': { description: 'Conta cadastrada' },
-          '400': { description: 'Dados inválidos' },
-        },
-      },
-    },
-    '/contas-receber/{id}': {
-      get: {
-        summary: 'Consulta uma conta pelo ID',
-        tags: ['Contas a receber'],
-        parameters: [parametroId],
-        responses: {
-          '200': { description: 'Conta encontrada' },
-          '404': { description: 'Conta não encontrada' },
-        },
-      },
-      put: {
-        summary: 'Atualiza todos os dados editáveis da conta',
-        tags: ['Contas a receber'],
-        parameters: [parametroId],
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: corpoConta } },
-        },
-        responses: {
-          '200': { description: 'Conta atualizada' },
-          '400': { description: 'Dados inválidos' },
-          '404': { description: 'Conta não encontrada' },
-        },
-      },
-      delete: {
-        summary: 'Exclui uma conta',
-        tags: ['Contas a receber'],
-        parameters: [parametroId],
-        responses: {
-          '200': { description: 'Conta excluída' },
-          '404': { description: 'Conta não encontrada' },
-        },
-      },
-    },
-    '/contas-receber/{id}/status': {
-      patch: {
-        summary: 'Altera somente o status da conta',
-        tags: ['Contas a receber'],
-        parameters: [parametroId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['status'],
-                properties: {
-                  status: {
-                    type: 'string',
-                    enum: ['PENDENTE', 'RECEBIDA', 'CANCELADA'],
-                    example: 'RECEBIDA',
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          '200': { description: 'Status alterado' },
-          '400': { description: 'Status inválido' },
-          '404': { description: 'Conta não encontrada' },
-        },
-      },
-    },
-  },
-};
-```
-
-### 9. Configurar e iniciar a aplicação
+### 8. Configurar a aplicação e o servidor
 
 Crie `src/app.ts`:
 
 ```ts
 import express from 'express';
-import swaggerUi from 'swagger-ui-express';
-import { documentacaoSwagger } from './configuracoes/swagger';
-import { contaReceberRotas } from './routes/contaReceberRotas';
+import { prestacaoContaRotas } from './routes/prestacaoContaRotas';
 
 export const app = express();
 
-app.use(express.json({ limit: '5mb' }));
-app.use('/documentacao', swaggerUi.serve, swaggerUi.setup(documentacaoSwagger));
-app.use('/contas-receber', contaReceberRotas);
+app.use(express.json());
+app.use('/prestacoes-de-contas', prestacaoContaRotas);
 ```
 
-O limite foi definido como `5mb` porque o JSON com uma imagem Base64 pode ser maior que um JSON comum. Isso não significa que toda imagem será aceita: o cliente deve reduzir a imagem antes do envio quando ela for muito grande.
+O prefixo registrado em `app.use` é combinado com os caminhos do router. Assim, o caminho `/` do router resulta em `/prestacoes-de-contas`, enquanto `/:id` resulta em `/prestacoes-de-contas/:id`.
 
-Substitua `src/servidor.ts` por:
+Atualize `src/servidor.ts`:
 
 ```ts
 import { app } from './app';
@@ -672,113 +483,351 @@ const porta = 3000;
 
 app.listen(porta, () => {
   console.log(`Servidor rodando em http://localhost:${porta}`);
-  console.log(`Swagger disponível em http://localhost:${porta}/documentacao`);
 });
 ```
 
-### 10. Formatar, compilar e executar
+`app.ts` configura a aplicação. `servidor.ts` inicia a escuta na porta `3000`. Essa divisão permite localizar com facilidade a configuração HTTP e o ponto de inicialização.
+
+**Checkpoint:** compile todos os arquivos e inicie o servidor:
 
 ```bash
-npm run formatar
 npm run build
 npm run dev
 ```
 
-Abra `http://localhost:3000/documentacao`, escolha uma rota, clique em **Try it out** e depois em **Execute**.
+O terminal deve mostrar:
 
-### 11. Testar as requisições
-
-Listar contas:
-
-```bash
-curl http://localhost:3000/contas-receber
+```text
+Servidor rodando em http://localhost:3000
 ```
 
-Filtrar por empresa e status:
+### 9. Testar GET, query parameter e POST
+
+Mantenha `npm run dev` em execução e abra outro terminal.
+
+Primeiro, liste as prestações:
 
 ```bash
-curl "http://localhost:3000/contas-receber?empresa=exemplo&status=PENDENTE"
+curl http://localhost:3000/prestacoes-de-contas
 ```
 
-Buscar pelo path parameter `id`:
+Resposta inicial esperada:
 
-```bash
-curl http://localhost:3000/contas-receber/1
+```json
+[]
 ```
 
-Cadastrar uma conta com a nota fiscal no body:
+Teste o query parameter:
 
 ```bash
-curl -X POST http://localhost:3000/contas-receber \
+curl "http://localhost:3000/prestacoes-de-contas/consulta?termo=viagem"
+```
+
+Resposta esperada:
+
+```json
+{ "termoRecebido": "viagem" }
+```
+
+Cadastre uma prestação. No Linux, macOS ou terminal Bash:
+
+```bash
+curl -X POST http://localhost:3000/prestacoes-de-contas \
   -H "Content-Type: application/json" \
-  -d '{"empresa":"Empresa ABC Ltda.","descricao":"Serviço de consultoria","valor":2300.50,"dataVencimento":"2026-08-30","notaFiscalBase64":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"}'
+  -d '{"empresa":"Empresa Exemplo Ltda.","descricao":"Hospedagem para visita técnica","valor":680,"dataVencimento":"2026-08-30"}'
 ```
 
-Atualizar todos os dados editáveis:
+No Windows PowerShell:
+
+```powershell
+$corpo = @{
+  empresa = "Empresa Exemplo Ltda."
+  descricao = "Hospedagem para visita técnica"
+  valor = 680
+  dataVencimento = "2026-08-30"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:3000/prestacoes-de-contas" `
+  -ContentType "application/json" `
+  -Body $corpo
+```
+
+Resposta esperada:
+
+```json
+{
+  "id": 1,
+  "empresa": "Empresa Exemplo Ltda.",
+  "descricao": "Hospedagem para visita técnica",
+  "valor": 680,
+  "dataVencimento": "2026-08-30",
+  "status": "PENDENTE"
+}
+```
+
+Repita o `GET /prestacoes-de-contas`. A lista deve conter o objeto recém-criado.
+
+### 10. Testar path parameter, PUT e PATCH
+
+Consulte a prestação de identificador `1`:
 
 ```bash
-curl -X PUT http://localhost:3000/contas-receber/1 \
+curl http://localhost:3000/prestacoes-de-contas/1
+```
+
+Substitua os dados editáveis com `PUT`:
+
+```bash
+curl -X PUT http://localhost:3000/prestacoes-de-contas/1 \
   -H "Content-Type: application/json" \
-  -d '{"empresa":"Empresa Exemplo Ltda.","descricao":"Serviço atualizado","valor":1750,"dataVencimento":"2026-09-10","notaFiscalBase64":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ"}'
+  -d '{"empresa":"Empresa Exemplo Ltda.","descricao":"Hospedagem e deslocamento","valor":750,"dataVencimento":"2026-09-05"}'
 ```
 
-Marcar a conta como recebida:
+O retorno mantém `id: 1` e `status: "PENDENTE"`, mas apresenta os novos dados.
+
+Altere somente o status com `PATCH`:
 
 ```bash
-curl -X PATCH http://localhost:3000/contas-receber/1/status \
+curl -X PATCH http://localhost:3000/prestacoes-de-contas/1/status \
   -H "Content-Type: application/json" \
   -d '{"status":"RECEBIDA"}'
 ```
 
-Excluir uma conta:
+Resposta esperada:
+
+```json
+{
+  "id": 1,
+  "empresa": "Empresa Exemplo Ltda.",
+  "descricao": "Hospedagem e deslocamento",
+  "valor": 750,
+  "dataVencimento": "2026-09-05",
+  "status": "RECEBIDA"
+}
+```
+
+No PowerShell, os mesmos testes podem ser feitos com `Invoke-RestMethod`, trocando `-Method` por `Put` ou `Patch` e fornecendo um objeto convertido com `ConvertTo-Json`, como no passo anterior.
+
+Para testar o `PUT` no PowerShell:
+
+```powershell
+$corpo = @{
+  empresa = "Empresa Exemplo Ltda."
+  descricao = "Hospedagem e deslocamento"
+  valor = 750
+  dataVencimento = "2026-09-05"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Put `
+  -Uri "http://localhost:3000/prestacoes-de-contas/1" `
+  -ContentType "application/json" `
+  -Body $corpo
+```
+
+Para testar o `PATCH`:
+
+```powershell
+$corpo = @{ status = "RECEBIDA" } | ConvertTo-Json
+
+Invoke-RestMethod -Method Patch `
+  -Uri "http://localhost:3000/prestacoes-de-contas/1/status" `
+  -ContentType "application/json" `
+  -Body $corpo
+```
+
+### 11. Testar DELETE e respostas 404
+
+Exclua a prestação:
 
 ```bash
-curl -X DELETE http://localhost:3000/contas-receber/1
+curl -i -X DELETE http://localhost:3000/prestacoes-de-contas/1
+```
+
+O cabeçalho deve apresentar `204 No Content`, sem JSON no corpo.
+
+Consulte novamente o mesmo identificador:
+
+```bash
+curl -i http://localhost:3000/prestacoes-de-contas/1
+```
+
+Resposta esperada:
+
+```json
+{ "mensagem": "Prestação de contas não encontrada" }
+```
+
+O status será `404 Not Found`. O mesmo tratamento ocorre ao tentar substituir, alterar o status ou excluir um identificador que não está no array.
+
+No PowerShell, use `Invoke-WebRequest` para observar também os códigos de resposta:
+
+```powershell
+Invoke-WebRequest -Method Delete `
+  -Uri "http://localhost:3000/prestacoes-de-contas/1"
+
+Invoke-WebRequest `
+  -Uri "http://localhost:3000/prestacoes-de-contas/1" `
+  -SkipHttpErrorCheck
 ```
 
 ## Código completo
 
-Ao final da aula, a parte executada da aplicação é:
+A estrutura usada ao final da aula é:
 
 ```text
-src/
-├── configuracoes/
-│   └── swagger.ts
-├── controllers/
-│   └── contaReceberController.ts
-├── routes/
-│   └── contaReceberRotas.ts
-├── services/
-│   └── contaReceberService.ts
-├── tipos/
-│   └── contaReceber.ts
-├── app.ts
-└── servidor.ts
+backend/
+├── src/
+│   ├── controllers/
+│   │   └── prestacaoContaController.ts
+│   ├── routes/
+│   │   └── prestacaoContaRotas.ts
+│   ├── services/
+│   │   └── prestacaoContaService.ts
+│   ├── tipos/
+│   │   └── prestacaoConta.ts
+│   ├── app.ts
+│   └── servidor.ts
+├── package.json
+└── tsconfig.json
 ```
 
-Todos os arquivos completos foram apresentados nos passos anteriores. Os scripts principais do `package.json` são:
+O conteúdo completo de `src/tipos/prestacaoConta.ts`, `src/services/prestacaoContaService.ts`, `src/routes/prestacaoContaRotas.ts`, `src/app.ts` e `src/servidor.ts` foi apresentado integralmente no passo a passo.
 
-```json
-{
-  "scripts": {
-    "dev": "tsx watch src/servidor.ts",
-    "build": "tsc",
-    "start": "node dist/servidor.js",
-    "formatar": "prettier --write ."
+O arquivo completo `src/controllers/prestacaoContaController.ts`, construído em três etapas, fica assim:
+
+```ts
+import { Request, Response } from 'express';
+import {
+  alterarStatusPrestacao,
+  buscarPrestacaoPorId,
+  criarPrestacao,
+  excluirPrestacao,
+  listarPrestacoes,
+  substituirPrestacao,
+} from '../services/prestacaoContaService';
+import {
+  CorpoStatusPrestacao,
+  DadosPrestacaoConta,
+  ParametrosId,
+} from '../tipos/prestacaoConta';
+
+export function listar(_requisicao: Request, resposta: Response): void {
+  resposta.status(200).json(listarPrestacoes());
+}
+
+export function demonstrarConsulta(
+  requisicao: Request,
+  resposta: Response,
+): void {
+  resposta.status(200).json({
+    termoRecebido: requisicao.query.termo ?? null,
+  });
+}
+
+export function buscarPorId(
+  requisicao: Request<ParametrosId>,
+  resposta: Response,
+): void {
+  const id = Number(requisicao.params.id);
+  const prestacao = buscarPrestacaoPorId(id);
+
+  if (!prestacao) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
+    return;
   }
+
+  resposta.status(200).json(prestacao);
+}
+
+export function criar(
+  requisicao: Request<object, object, DadosPrestacaoConta>,
+  resposta: Response,
+): void {
+  const prestacaoCriada = criarPrestacao(requisicao.body);
+  resposta.status(201).json(prestacaoCriada);
+}
+
+export function substituir(
+  requisicao: Request<ParametrosId, object, DadosPrestacaoConta>,
+  resposta: Response,
+): void {
+  const id = Number(requisicao.params.id);
+  const prestacaoAtualizada = substituirPrestacao(id, requisicao.body);
+
+  if (!prestacaoAtualizada) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
+    return;
+  }
+
+  resposta.status(200).json(prestacaoAtualizada);
+}
+
+export function alterarStatus(
+  requisicao: Request<ParametrosId, object, CorpoStatusPrestacao>,
+  resposta: Response,
+): void {
+  const id = Number(requisicao.params.id);
+  const prestacaoAtualizada = alterarStatusPrestacao(
+    id,
+    requisicao.body.status,
+  );
+
+  if (!prestacaoAtualizada) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
+    return;
+  }
+
+  resposta.status(200).json(prestacaoAtualizada);
+}
+
+export function excluir(
+  requisicao: Request<ParametrosId>,
+  resposta: Response,
+): void {
+  const id = Number(requisicao.params.id);
+  const prestacaoExcluida = excluirPrestacao(id);
+
+  if (!prestacaoExcluida) {
+    resposta
+      .status(404)
+      .json({ mensagem: 'Prestação de contas não encontrada' });
+    return;
+  }
+
+  resposta.status(204).send();
 }
 ```
 
+O `package.json` e o `tsconfig.json` permanecem com a configuração criada na Aula 1. Nenhuma nova dependência é necessária para executar esta aula.
+
 ## Erros comuns
 
-* **`requisicao.body` está vazio:** confirme que `express.json()` aparece antes das rotas e envie `Content-Type: application/json`.
-* **A resposta é `413 Payload Too Large`:** a imagem ultrapassou o limite do JSON. Reduza a imagem ou confira o limite configurado.
-* **A imagem não aparece ao recuperar a conta:** confira se o valor enviado contém a Data URL completa, incluindo o tipo da imagem e `;base64,`.
-* **O filtro não funciona:** query parameters começam com `?` e são separados por `&`.
-* **`Cannot GET /contas-receber`:** confira o método, a URL e o registro das rotas em `app.ts`.
-* **O Swagger não abre:** use `/documentacao` e confira a instalação de `swagger-ui-express`.
-* **Os dados desaparecem ao reiniciar:** nesta implementação, a lista está na memória do processo e volta ao estado inicial com o servidor.
+* **`Cannot GET /prestacoes-de-contas`:** confira se `app.use('/prestacoes-de-contas', prestacaoContaRotas)` foi registrado em `app.ts` e se `servidor.ts` importa `app`.
+* **`requisicao.body` chega como `undefined`:** `app.use(express.json())` precisa aparecer antes do registro das rotas, e a requisição deve enviar `Content-Type: application/json`.
+* **A rota `/consulta` retorna 404:** registre `/consulta` antes de `/:id` em `prestacaoContaRotas.ts`.
+* **Uma busca existente retorna 404:** path parameters são textos. Converta `requisicao.params.id` com `Number()` antes de chamar o service.
+* **A lista volta a ficar vazia:** os registros pertencem ao processo em execução. Ao reiniciar `npm run dev`, o array é criado novamente.
+* **O `DELETE` parece não responder:** o status `204` não possui body. Use `curl -i` para visualizar o código retornado.
+* **O TypeScript informa import não encontrado:** confira os nomes `prestacaoContaController.ts`, `prestacaoContaService.ts`, `prestacaoContaRotas.ts` e `prestacaoConta.ts`, inclusive letras maiúsculas e minúsculas.
 
 ## Resumo
 
-Nesta aula, construímos uma API de contas a receber vinculadas a empresas. Praticamos `GET`, `POST`, `PUT`, `PATCH` e `DELETE`, usamos path parameters, query parameters e body, e recebemos a imagem da nota fiscal como Base64. Também configuramos a estrutura de pastas, o Prettier e a documentação Swagger.
+Nesta aula, evoluímos o backend da Aula 1 para uma API de prestações de contas com dados em memória. Usamos:
+
+* `GET`, `POST`, `PUT`, `PATCH` e `DELETE` para representar operações diferentes;
+* path parameter para identificar uma prestação;
+* query parameter em uma rota demonstrativa;
+* body para transportar os dados de criação e alteração;
+* status `200`, `201`, `204` e `404` para comunicar resultados;
+* routes para definir endpoints;
+* controllers para tratar requisições e respostas HTTP;
+* service para manipular o array de prestações.
+
+O backend agora executa o ciclo de cadastro, consulta, substituição, alteração de status e exclusão usando o mesmo domínio e o mesmo projeto iniciado na aula anterior.

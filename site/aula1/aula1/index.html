@@ -12,6 +12,8 @@
         <link rel="prev" href="../..">
       
       
+        <link rel="next" href="../../aula2/aula2/">
+      
       
         
       
@@ -21,7 +23,7 @@
     
     
       
-        <title>Aula 1 — Node.js e APIs HTTP - Upf topicos especiasis II - Aulas</title>
+        <title>Aula 1 — Node.js e APIs HTTP - Upf topicos especiais II - Aulas</title>
       
     
     
@@ -86,7 +88,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Upf topicos especiasis II - Aulas" class="md-header__button md-logo" aria-label="Upf topicos especiasis II - Aulas" data-md-component="logo">
+    <a href="../.." title="Upf topicos especiais II - Aulas" class="md-header__button md-logo" aria-label="Upf topicos especiais II - Aulas" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -100,7 +102,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Upf topicos especiasis II - Aulas
+            Upf topicos especiais II - Aulas
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -244,6 +246,44 @@
   
 
       
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../aula2/aula2/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Aula 2 — Contas a receber e rotas HTTP
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../aula3/aula3/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Aula 3 — Validações com Zod e organização do backend
+
+      </a>
+    </li>
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -266,13 +306,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Upf topicos especiasis II - Aulas" class="md-nav__button md-logo" aria-label="Upf topicos especiasis II - Aulas" data-md-component="logo">
+    <a href="../.." title="Upf topicos especiais II - Aulas" class="md-nav__button md-logo" aria-label="Upf topicos especiais II - Aulas" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    Upf topicos especiasis II - Aulas
+    Upf topicos especiais II - Aulas
   </label>
   
   <ul class="md-nav__list" data-md-scrollfix>
@@ -571,6 +611,60 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aula2/aula2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aula 2 — Contas a receber e rotas HTTP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aula3/aula3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aula 3 — Validações com Zod e organização do backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -825,14 +919,14 @@
 <p>O servidor devolve uma resposta com um status HTTP e, neste projeto, um JSON. Por exemplo, <code>200</code> indica que uma consulta foi atendida e <code>201</code> indica que um recurso foi criado.</p>
 <h2 id="passo-a-passo">Passo a passo</h2>
 <h3 id="1-criar-a-pasta-do-backend">1. Criar a pasta do backend</h3>
-<p>Na raiz em que você guarda seus projetos, crie a pasta <code>backend_inicial</code> e entre nela.</p>
+<p>Na raiz em que você guarda seus projetos, crie a pasta <code>backend</code> e entre nela.</p>
 <p>No Linux ou macOS:</p>
-<pre><code class="language-bash">mkdir backend_inicial
-cd backend_inicial
+<pre><code class="language-bash">mkdir backend
+cd backend
 </code></pre>
 <p>No Windows, pelo Prompt de Comando ou PowerShell:</p>
-<pre><code class="language-powershell">mkdir backend_inicial
-cd backend_inicial
+<pre><code class="language-powershell">mkdir backend
+cd backend
 </code></pre>
 <p>Agora inicialize um projeto Node.js. O comando cria o arquivo <code>package.json</code>, que registra as dependências e os comandos do projeto.</p>
 <pre><code class="language-bash">npm init -y
@@ -855,8 +949,8 @@ npm pkg set scripts.build=&quot;tsc&quot;
 npm pkg set scripts.start=&quot;node dist/servidor.js&quot;
 </code></pre>
 <h3 id="3-criar-a-estrutura-de-pastas-e-arquivos">3. Criar a estrutura de pastas e arquivos</h3>
-<p>Dentro de <code>backend_inicial</code>, crie a estrutura abaixo. As rotas ficam separadas dos controllers para facilitar a localização de cada parte da aplicação.</p>
-<pre><code class="language-text">backend_inicial/
+<p>Dentro de <code>backend</code>, crie a estrutura abaixo. As rotas ficam separadas dos controllers para facilitar a localização de cada parte da aplicação.</p>
+<pre><code class="language-text">backend/
 ├── src/
 │   ├── controllers/
 │   │   ├── helloController.ts
@@ -884,7 +978,7 @@ New-Item src/controllers/prestacaoContasController.ts -ItemType File
 New-Item src/controllers/usariosController.ts -ItemType File
 New-Item src/routes/router.ts -ItemType File
 </code></pre>
-<p>Crie também o arquivo <code>tsconfig.json</code> na raiz de <code>backend_inicial</code>. Ele informa ao TypeScript onde está o código-fonte e onde deve ficar a versão compilada.</p>
+<p>Crie também o arquivo <code>tsconfig.json</code> na raiz de <code>backend</code>. Ele informa ao TypeScript onde está o código-fonte e onde deve ficar a versão compilada.</p>
 <h3 id="4-configurar-o-typescript">4. Configurar o TypeScript</h3>
 <p>Em <code>tsconfig.json</code>, escreva:</p>
 <pre><code class="language-json">{
@@ -997,7 +1091,7 @@ export function salvar(
 <p>O terceiro tipo de <code>Request</code> representa o corpo da requisição. Por enquanto, <code>console.log</code> permite verificar no terminal o que chegou ao servidor. Nesta aula, a informação não é persistida.</p>
 <h2 id="codigo-completo">Código completo</h2>
 <p>Estrutura criada nesta etapa:</p>
-<pre><code class="language-text">backend_inicial/
+<pre><code class="language-text">backend/
 ├── src/
 │   ├── controllers/
 │   │   ├── helloController.ts
@@ -1068,7 +1162,7 @@ export function salvar(
 <li><strong>A porta 3000 já está em uso:</strong> finalize o outro processo que está usando a porta ou altere <code>const porta = 3000</code>.</li>
 <li><strong><code>Cannot GET /...</code>:</strong> confira o método HTTP e a URL. <code>GET /buscar-por-cpf/:cpf</code> precisa receber um CPF no final da URL.</li>
 <li><strong><code>requisicao.body</code> está vazio:</strong> confira se <code>app.use(express.json())</code> está antes de <code>app.use(rotas)</code> e se o cabeçalho é <code>Content-Type: application/json</code>.</li>
-<li><strong>O comando <code>npm run dev</code> não inicia:</strong> execute <code>npm install</code> dentro de <code>backend_inicial</code> antes de tentar novamente.</li>
+<li><strong>O comando <code>npm run dev</code> não inicia:</strong> execute <code>npm install</code> dentro de <code>backend</code> antes de tentar novamente.</li>
 </ul>
 <h2 id="resumo">Resumo</h2>
 <p>Nesta aula, criamos uma API Express com TypeScript, organizamos rotas e controllers, respondemos um <code>GET</code>, lemos um parâmetro de URL e recebemos um JSON com <code>POST</code>.</p>
