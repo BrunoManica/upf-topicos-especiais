@@ -34,3 +34,4 @@ nav:
   - Aula 4 — MongoDB e persistência de dados:
       - Tutorial principal: aula4/aula4.md
       - Tutorial da dinâmica CRUD: aula4/tutorial-crud-persistido.md
+      - dinamica end to end: aula4/sprint-crud-end-to-end.md
