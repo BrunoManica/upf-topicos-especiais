@@ -1,22 +1,71 @@
 import { Request, Response } from 'express';
+import { Usuario } from '../types/usuario';
+import {criarUsuario, listarUsuarios, atualizarUsuario, excluirUsuario} from '../services/userService'
 
-export function buscarPorCpf(
-  requisicao: Request<{ cpf: string }>,
+interface ParametrosId {
+  id: String;
+}
+
+export interface ConsultaUsuario {
+  id?: string;
+}
+
+
+export function criar(
+  requisicao: Request<object, object, Usuario>,
   resposta: Response,
-): void {
-  const { cpf } = requisicao.params;
+) {
+  const novoUsuario = requisicao.body;
+  const retorno = criarUsuario(novoUsuario);
 
-  resposta.status(200).json({
-    nome: 'fulano de tal',
-    cpf: cpf,
-    contasPrestadas: [
-      {
-        id: 1,
-        nomeGasto: 'ao mossar',
-        data: '2026-07-28',
-        valor: 998.99,
-        status: 'REJEITADO',
-      },
-    ],
-  });
+  resposta.status(201).json(retorno);
+}
+
+export function listarUsuario(
+  requisicao: Request<object, object, object, ConsultaUsuario>,
+  resposta: Response,
+) {
+  const { id } = requisicao.query;
+  const usuarios = listarUsuarios(id);
+  resposta.status(200).json(usuarios);
+}
+
+export function atualizar(
+  requisicao: Request<ParametrosId, object, Usuario>,
+  resposta: Response,
+) {
+  const usuario = atualizarUsuario(requisicao.params.id, requisicao.body);
+
+  if (usuario) {
+    resposta.status(200).json({ mensagem: 'sucesso ao atualizar' })
+    return
+  }
+
+  resposta.status(500).json({ mensagem: 'Erro ao atualizar' });
+}
+
+export function excluir(
+  requisicao: Request<ParametrosId, object, object>,
+  resposta: Response,
+) {
+  if (excluirUsuario(requisicao.params.id)) {
+    resposta.status(200).json({ mensagem: 'sucesso ao excluir' });
+    return;
+  }
+
+  resposta.status(500).json({ mensagem: 'Erro ao excluir' });
+}
+
+
+
+export function getUsuarioById(
+  requisicao: Request<ParametrosId, object, object>,
+  resposta: Response,
+) {
+  if (excluirConta(requisicao.params.id)) {
+    resposta.status(200).json({ mensagem: 'sucesso ao excluir' });
+    return;
+  }
+
+  resposta.status(500).json({ mensagem: 'Erro ao excluir' });
 }
